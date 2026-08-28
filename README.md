@@ -1,4 +1,5 @@
-# rPharma 2026 — patientProfilesVis Workshop
+# R/Pharma 2026 APAC Workshop — Hands-On Patient Profile Visualization
+*Refining the R package patientProfilesVis with ggplot2, Interacting in shiny*
 
 Hands-on exercises for building patient profile plots with [`patientProfilesVis`](https://github.com/openanalytics/patientProfilesVis) and ADaM example data from [`clinUtils`](https://cran.r-project.org/package=clinUtils).
 
