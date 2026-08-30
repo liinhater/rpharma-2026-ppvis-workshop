@@ -10,6 +10,8 @@ library(dplyr) # included in tidyverse
 #' that can be further customized
 library(ggplot2) # included in tidyverse
 
+source("exercises/ggplot_recipe.R")
+
 #---- R programming ----
 # import example data:
 data(dataADaMCDISCP01)
@@ -21,10 +23,24 @@ names(dataADaM)
 labelVarsADaM <- attr(dataADaM, "labelVars")
 head(labelVarsADaM)
 
-# adverse events:
+#---- Run - Starting Point ----
+# ADAE adverse events — each row is one interval (start–end) per AE term.
+# Note: subjectProfileEventPlot() handles a single timeVar (geom_point only).
+# Intervals with no real duration (start = end, or missing end imputed to start
+# via timeImpType = "minimal") are conceptually events, but still draw geom_segment
+# plus endpoint symbols — not the same code path as subjectProfileEventPlot().
+# ADAE has start/end dates, so interval is the right fit; we skip a separate event
+# exercise because the inspect/adapt workflow on the ggplot object is the same.
 dataADAE <- dataADaM$ADAE
-# sort severities
+# Fix severity order for color legend (MILD → MODERATE → SEVERE).
 dataADAE[, "AESEV"] <- factor(dataADAE[, "AESEV"], levels = c("MILD", "MODERATE", "SEVERE"))
+
+subject_demo <- "01-701-1148"
+
+# Subset one subject at plot time (subjectSubset), rather than plotting all subjects
+# and taking [[1]][[1]]. Either way you get one subject's figure — but if you only
+# subset when extracting [[1]][[1]], colorVar legend still reflects severities
+# present in THAT subject's rows (e.g. two AESEV levels → two legend entries, not three).
 adaePlots <- subjectProfileIntervalPlot(
   data = dataADAE,
   paramVar = "AEDECOD",
@@ -32,25 +48,35 @@ adaePlots <- subjectProfileIntervalPlot(
   timeEndVar = "AENDY",
   colorVar = "AESEV",
   labelVars = labelVarsADaM,
-  timeTrans = getTimeTrans("asinh-neg"),
+  subjectSubset = subject_demo,
+  timeTrans = getTimeTrans("asinh-neg"),   # compress negative days; linear for ADY >= 0
   title = "Adverse events"
 )
 
-adaePlots[[1]][[1]]$data #recipe obtained the # for this data
-ggplot_recipe(adaePlots[[1]][[1]])
-
-
+#---- Focus ----
+# One subject, one page — adaePlots[[1]][[1]] when subjectSubset has one ID.
 gg_int <- adaePlots[[1]][[1]]
-gg_int$data
-gg_int_seg_df <- gg_int$layers[[1]]$data
+gg_int
 
-#==== Compare ====
-# adverse events - custom AESTDY and AEENDY for same AEDECOD
-# Target
+## Inspect — color legend lists severities present in this subject only.
+levels(dataADAE$AESEV)                    # 3 levels defined in ADAE
+unique(gg_int$layers[[1]]$data$AESEV)     # levels in this plot / legend (may be fewer)
+# Later: colorPalette = ae_sev_palette forces all three levels in the custom plot.
+
+## Inspect — ggplot recipe (layers, facets, labels); see ggplot_recipe.R.
+ggplot_recipe(gg_int)
+
+## Inspect — interval plots often have no default $data (waiver); use layer data.
+gg_int$data
+gg_int$layers[[1]]$data   # layer 1: segment data (geom segment / line)
+length(gg_int$layers)
+
+#---- Run - Impute and Legend ----
+# Custom intervals: impute missing starts/ends, override one AE segment, data cut.
 data_cut_dy <- 7 * 26
 
 adae_custom <- dataADAE %>% 
-  filter(USUBJID == "01-701-1148") %>%
+  filter(USUBJID == subject_demo) %>%
   select(USUBJID, AESEQ, AEDECOD, ASTDY, AENDY, AESEV) %>%
   mutate(
     ASTDY_C = case_when(
@@ -64,6 +90,8 @@ adae_custom <- dataADAE %>%
     IMP_ENDY = data_cut_dy
   )
 
+# Extend labelVars for custom columns — use c(..., VAR = "label") not [ ] indexing
+# (bracket indexing can produce names like AESEV_C.AESEV).
 labelVarsADaM_custom <- c(
   labelVarsADaM,
   ASTDY_C = unname(labelVarsADaM["ASTDY"]),
@@ -88,19 +116,21 @@ adaePlots_custom <- subjectProfileIntervalPlot(
   timeLimEndVar = "IMP_ENDY",
   timeLim = c(1, data_cut_dy),
   colorVar = "AESEV_C",
-  colorPalette = ae_sev_palette,
+  colorPalette = ae_sev_palette,   # named palette => full legend for all severity levels
   labelVars = labelVarsADaM_custom,
   shapeSize = rel(6),
   #timeTrans = getTimeTrans("asinh-neg"),
   title = "Adverse events"
 )
 
+#---- Focus ----
 gg_int_custom <- adaePlots_custom[[1]][[1]]
+gg_int_custom
 
-# Place legends inside the plot panel using normalized coordinates:
-# c(x, y) where x and y range from 0 (left/bottom) to 1 (right/top).
-# c(0.92, 0.55) = 92% across from the left, 55% up from the bottom.
-
+## Adapt — x-axis as study weeks; legend styling (covered in depth here vs line demo).
+# scale_x_continuous: custom breaks/labels for the data-cut window.
+# guides(): separate color (segment) and shape (status symbol) legends.
+# theme(legend.position = c(x, y)): npc coords — 0 = left/bottom, 1 = right/top.
 gg_int_custom +
   scale_x_continuous(
     breaks = seq(0, data_cut_dy, by = 14),         
@@ -119,9 +149,3 @@ gg_int_custom +
     legend.spacing.y = unit(-5, "pt"),
     legend.box = "vertical"
   )
-
-
-# Check data for customizing target data
-gg_int_custom_seg_df <- gg_int_custom$layers[[1]]$data
-gg_int_custom_pt_df <- gg_int_custom$layers[[2]]$data
-identical(gg_int_custom_seg_df, gg_int_custom_pt_df)
