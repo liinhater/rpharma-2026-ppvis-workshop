@@ -1,10 +1,13 @@
-# Quick sanity check after setup (renv or manual install).
+# Quick sanity check after setup (renv::restore() or setup/install_pkg.R).
+# Run from the project opened via the .Rproj so the project library is active.
 
 required_pkgs <- c(
   "patientProfilesVis",
   "clinUtils",
   "ggplot2",
-  "dplyr"
+  "dplyr",
+  "shiny",
+  "cowplot"
 )
 
 for (pkg in required_pkgs) {
